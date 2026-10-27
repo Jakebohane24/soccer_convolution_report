@@ -1,0 +1,347 @@
+[
+  {
+    "index": 0,
+    "from": -1,
+    "type": "Conv",
+    "shape_nchw": [
+      1,
+      16,
+      192,
+      320
+    ],
+    "kernel": [
+      3,
+      3
+    ],
+    "stride": [
+      2,
+      2
+    ]
+  },
+  {
+    "index": 1,
+    "from": -1,
+    "type": "Conv",
+    "shape_nchw": [
+      1,
+      32,
+      96,
+      160
+    ],
+    "kernel": [
+      3,
+      3
+    ],
+    "stride": [
+      2,
+      2
+    ]
+  },
+  {
+    "index": 2,
+    "from": -1,
+    "type": "C3k2",
+    "shape_nchw": [
+      1,
+      64,
+      96,
+      160
+    ],
+    "inner_blocks": [
+      "Bottleneck"
+    ]
+  },
+  {
+    "index": 3,
+    "from": -1,
+    "type": "Conv",
+    "shape_nchw": [
+      1,
+      64,
+      48,
+      80
+    ],
+    "kernel": [
+      3,
+      3
+    ],
+    "stride": [
+      2,
+      2
+    ]
+  },
+  {
+    "index": 4,
+    "from": -1,
+    "type": "C3k2",
+    "shape_nchw": [
+      1,
+      128,
+      48,
+      80
+    ],
+    "inner_blocks": [
+      "Bottleneck"
+    ]
+  },
+  {
+    "index": 5,
+    "from": -1,
+    "type": "Conv",
+    "shape_nchw": [
+      1,
+      128,
+      24,
+      40
+    ],
+    "kernel": [
+      3,
+      3
+    ],
+    "stride": [
+      2,
+      2
+    ]
+  },
+  {
+    "index": 6,
+    "from": -1,
+    "type": "C3k2",
+    "shape_nchw": [
+      1,
+      128,
+      24,
+      40
+    ],
+    "inner_blocks": [
+      "C3k"
+    ]
+  },
+  {
+    "index": 7,
+    "from": -1,
+    "type": "Conv",
+    "shape_nchw": [
+      1,
+      256,
+      12,
+      20
+    ],
+    "kernel": [
+      3,
+      3
+    ],
+    "stride": [
+      2,
+      2
+    ]
+  },
+  {
+    "index": 8,
+    "from": -1,
+    "type": "C3k2",
+    "shape_nchw": [
+      1,
+      256,
+      12,
+      20
+    ],
+    "inner_blocks": [
+      "C3k"
+    ]
+  },
+  {
+    "index": 9,
+    "from": -1,
+    "type": "SPPF",
+    "shape_nchw": [
+      1,
+      256,
+      12,
+      20
+    ]
+  },
+  {
+    "index": 10,
+    "from": -1,
+    "type": "C2PSA",
+    "shape_nchw": [
+      1,
+      256,
+      12,
+      20
+    ]
+  },
+  {
+    "index": 11,
+    "from": -1,
+    "type": "Upsample",
+    "shape_nchw": [
+      1,
+      256,
+      24,
+      40
+    ]
+  },
+  {
+    "index": 12,
+    "from": [
+      -1,
+      6
+    ],
+    "type": "Concat",
+    "shape_nchw": [
+      1,
+      384,
+      24,
+      40
+    ]
+  },
+  {
+    "index": 13,
+    "from": -1,
+    "type": "C3k2",
+    "shape_nchw": [
+      1,
+      128,
+      24,
+      40
+    ],
+    "inner_blocks": [
+      "Bottleneck"
+    ]
+  },
+  {
+    "index": 14,
+    "from": -1,
+    "type": "Upsample",
+    "shape_nchw": [
+      1,
+      128,
+      48,
+      80
+    ]
+  },
+  {
+    "index": 15,
+    "from": [
+      -1,
+      4
+    ],
+    "type": "Concat",
+    "shape_nchw": [
+      1,
+      256,
+      48,
+      80
+    ]
+  },
+  {
+    "index": 16,
+    "from": -1,
+    "type": "C3k2",
+    "shape_nchw": [
+      1,
+      64,
+      48,
+      80
+    ],
+    "inner_blocks": [
+      "Bottleneck"
+    ]
+  },
+  {
+    "index": 17,
+    "from": -1,
+    "type": "Conv",
+    "shape_nchw": [
+      1,
+      64,
+      24,
+      40
+    ],
+    "kernel": [
+      3,
+      3
+    ],
+    "stride": [
+      2,
+      2
+    ]
+  },
+  {
+    "index": 18,
+    "from": [
+      -1,
+      13
+    ],
+    "type": "Concat",
+    "shape_nchw": [
+      1,
+      192,
+      24,
+      40
+    ]
+  },
+  {
+    "index": 19,
+    "from": -1,
+    "type": "C3k2",
+    "shape_nchw": [
+      1,
+      128,
+      24,
+      40
+    ],
+    "inner_blocks": [
+      "Bottleneck"
+    ]
+  },
+  {
+    "index": 20,
+    "from": -1,
+    "type": "Conv",
+    "shape_nchw": [
+      1,
+      128,
+      12,
+      20
+    ],
+    "kernel": [
+      3,
+      3
+    ],
+    "stride": [
+      2,
+      2
+    ]
+  },
+  {
+    "index": 21,
+    "from": [
+      -1,
+      10
+    ],
+    "type": "Concat",
+    "shape_nchw": [
+      1,
+      384,
+      12,
+      20
+    ]
+  },
+  {
+    "index": 22,
+    "from": -1,
+    "type": "C3k2",
+    "shape_nchw": [
+      1,
+      256,
+      12,
+      20
+    ],
+    "inner_blocks": [
+      "C3k"
+    ]
+  }
+]

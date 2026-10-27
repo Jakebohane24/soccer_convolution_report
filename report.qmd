@@ -1,0 +1,235 @@
+---
+title: "Improving Human Detection in Soccer Video with Neighboring Frames"
+author: "Jake Bohane"
+subtitle: "Testing whether neighboring frames improve YOLO11n detections"
+date: today
+date-format: "MMMM D, YYYY"
+bibliography: references.bib
+lang: en
+format:
+  pdf:
+    toc: true
+    number-sections: true
+    documentclass: scrartcl
+    pdf-engine: xelatex
+    papersize: letter
+    fontsize: 11pt
+    geometry: margin=1in
+    colorlinks: true
+    linkcolor: black
+    citecolor: black
+    urlcolor: black
+include-in-header:
+  text: |
+    \AtBeginDocument{\hypersetup{linkcolor=black, citecolor=black, urlcolor=black}}
+execute:
+  eval: true
+  echo: false
+---
+
+```{r}
+#| label: setup-results
+#| include: false
+library(ggplot2)
+
+base_colors <- c(
+  "YOLO head fine tuned" = "#3767A6",
+  "Repeated frame 1×1" = "#C77A27",
+  "Multi frame 1×1" = "#22866B",
+  "Repeated frame 1×1 + 3×3" = "#B44D6A",
+  "Multi frame 1×1 + 3×3" = "#167D9A",
+  "3 frames 1×1" = "#22866B",
+  "3 frames 1×1 + 3×3" = "#167D9A",
+  "5 frames 1×1 + 3×3" = "#7861A6",
+  "5 frames 1×1 + 5×5" = "#B44D6A",
+  "3 frames 1×1 + C3k2" = "#8B694A"
+)
+lighten <- function(hex) {
+  rgb <- col2rgb(hex) / 255
+  rgb(rgb[1, ] * .52 + .48, rgb[2, ] * .52 + .48, rgb[3, ] * .52 + .48)
+}
+
+baseline_data <- data.frame(
+  model = c("YOLO head fine tuned", "YOLO head fine tuned", "Multi frame 1×1", "Multi frame 1×1", "Multi frame 1×1 + 3×3", "Multi frame 1×1 + 3×3"),
+  seed = c(42, 43, 42, 43, 42, 43),
+  AP50_95_percent = c(43.3790142465, 43.2788637310, 46.1335922953, 47.4466189650, 47.8231273500, 46.4424157820)
+)
+repeated_data <- data.frame(
+  model = c("Repeated frame 1×1", "Repeated frame 1×1", "Multi frame 1×1", "Multi frame 1×1", "Repeated frame 1×1 + 3×3", "Repeated frame 1×1 + 3×3", "Multi frame 1×1 + 3×3", "Multi frame 1×1 + 3×3"),
+  seed = c(42, 43, 42, 43, 42, 43, 42, 43),
+  AP50_95_percent = c(42.5305392194, 43.6213661027, 46.1335922953, 47.4466189650, 41.9852101218, 43.5554690383, 47.8231273500, 46.4424157820)
+)
+architecture_data <- data.frame(
+  model = rep(c("3 frames 1×1", "3 frames 1×1 + 3×3", "5 frames 1×1 + 3×3", "5 frames 1×1 + 5×5", "3 frames 1×1 + C3k2"), each = 2),
+  seed = rep(c(42, 43), 5),
+  AP50_95_percent = c(46.0991141388, 47.4076593846, 47.7386430916, 46.4184671241, 47.0300213421, 47.4488911819, 46.0215036617, 46.5167119655, 45.2062617009, 47.1873417833)
+)
+
+make_plot <- function(d, title, subtitle, ordered_models, labels) {
+  d$model <- factor(d$model, levels = ordered_models)
+  d$seed <- factor(d$seed, levels = c(42, 43))
+  d$key <- paste(d$model, d$seed, sep = "___")
+  colors <- unlist(lapply(ordered_models, function(model) {
+    setNames(c(lighten(base_colors[[model]]), base_colors[[model]]), c(paste(model, 42, sep = "___"), paste(model, 43, sep = "___")))
+  }))
+  ggplot(d, aes(x = model, y = AP50_95_percent, fill = key)) +
+    geom_col(position = position_dodge2(width = .72, padding = .06), width = .62) +
+    geom_text(aes(label = sprintf("%.2f%%", AP50_95_percent)), position = position_dodge2(width = .72, padding = .06), vjust = -.45, size = 3.8, color = "#253746") +
+    scale_fill_manual(values = colors, guide = "none") + scale_x_discrete(labels = labels) +
+    scale_y_continuous(breaks = seq(40, 50, 2), labels = function(x) paste0(x, "%"), expand = expansion(mult = c(0, .09))) +
+    coord_cartesian(ylim = c(40, 50)) + labs(title = title, subtitle = paste0(subtitle, "\nSeed 42: left bar     Seed 43: right bar"), x = NULL, y = "AP50 to 95 (%)") +
+    theme_minimal(base_size = 13) + theme(plot.title = element_text(size = 22, face = "bold", color = "#182A3A", margin = margin(b = 8)), plot.subtitle = element_text(size = 12, color = "#526170", lineheight = 1.45, margin = margin(b = 16)), axis.title.y = element_text(margin = margin(r = 12)), axis.text.x = element_text(size = 12, color = "#394B59", margin = margin(t = 10)), axis.text.y = element_text(size = 12, color = "#394B59"), panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(), panel.grid.major.y = element_line(color = "#E5E9ED"), plot.margin = margin(18, 22, 18, 22))
+}
+
+result_table <- function(d, ordered_models) {
+  av <- aggregate(AP50_95_percent ~ model + seed, d, mean)
+  wide <- reshape(av, idvar = "model", timevar = "seed", direction = "wide")
+  means <- aggregate(AP50_95_percent ~ model, d, mean)
+  out <- data.frame(Model = ordered_models, `Seed 42` = wide$AP50_95_percent.42[match(ordered_models, wide$model)], `Seed 43` = wide$AP50_95_percent.43[match(ordered_models, wide$model)], Average = means$AP50_95_percent[match(ordered_models, means$model)])
+  out[,-1] <- lapply(out[,-1], function(x) sprintf("%.2f%%", x))
+  knitr::kable(out, align = c("l", "r", "r", "r"))
+}
+```
+
+## Introduction
+
+When I first applied a pretrained YOLO detector to soccer footage, I assumed that processing video meant the model used information from neighboring frames. Instead, the detector processed each frame independently. A separate tracker connected detections over time, but information from neighboring frames did not feed back into the detector’s predictions.
+
+This raised a question: could information from surrounding frames improve detection in the current frame? Soccer footage provides a natural setting for this experiment because players move continuously, while individual frames can contain motion blur, overlapping, and small objects. Neighboring frames might provide useful context when a single frame is ambiguous.
+
+### Architecture
+
+To investigate this question, I used YOLO11n, a lightweight, general purpose object detector [@ultralytics2024yolo11]. It was pretrained on COCO, a dataset of everyday scenes containing people, vehicles, animals, and other common objects [@lin2014microsoft], rather than specifically soccer footage. It therefore recognizes players, goalkeepers, and referees under the same general “person” category.
+
+YOLO11n processes an image through three main components: the backbone, the neck, and the detection head. The backbone applies a sequence of layers that transforms the image into tensors, progressively reducing their spatial dimensions while generally increasing their number of channels. The neck applies layers that upsample and downsample tensors, combine tensors from different backbone stages, and adjust their channel counts. It produces three output tensors at different spatial resolutions. The detection head uses each tensor to predict bounding box coordinates and class probabilities at its respective resolution. For this study, postprocessing retains predictions for the person class, filters low confidence predictions, and removes duplicate boxes.
+
+The following diagrams show the model path from backbone to neck to detection head. Each labeled layer represents a major category of transformation in the model, such as convolution, C3k2 feature processing, spatial pooling, or C2PSA attention. Supporting operations inside that module, such as BatchNorm, SiLU activation, pooling, or attention sublayers, are included under the same label. Tensor faces are proportional to spatial dimensions, while depth represents channel count. The neck and detection head use larger spatial drawing scales so their connections remain readable.
+
+\begin{center}
+{\Large\bfseries YOLO11n architecture}
+\end{center}
+
+![Backbone modules shown as sequencial tensors.](figures/backbone_detailed.pdf){#fig-backbone-detailed fig-alt="YOLO11n backbone blocks L1 through L11, showing five stages of spatial downsampling and outputs from L5, L7, and L11 that feed the neck." fig-pos="H" width=100%}
+
+![Neck modules shown as sequential tensors beginning with backbone output L11. Reused tensors appear above the layer that receives them through concatenation, connected by downward arrows.](figures/neck_diagram.pdf){#fig-neck-detailed fig-pos="H" width=100%}
+
+![Detection head modules at three resolutions, each with separate branches for box coordinates and class probabilities.](figures/head_diagram.pdf){#fig-head-stacked fig-pos="H" width=100%}
+
+### Experiment information
+
+#### Architecture changes
+
+For the multi frame models, the previous, current, and next frames each pass through the same backbone and neck. At each of the three output resolutions, using layers L17, L20, and L23, their tensors are concatenated along the channel dimension. We then apply the selected multi frame processing layer(s) before passing the resulting tensors to the detection head, which predicts detections for the current frame. The multi frame variations test different layer designs after concatenation.
+
+The chart labels describe the processing applied after concatenation. The three frame 1×1 model uses a multi frame processing layer containing a 1×1 convolution, BatchNorm, and SiLU activation to reduce the concatenated tensor from three times the original channel count back to the original count. The three frame 1×1 plus 3×3 model uses the previously stated 1x1 layer followed by a 3×3 convolution, BatchNorm, and SiLU activation layer. The five frame model uses five neighboring frames and applies the same 1×1 plus 3×3 sequence. Additional variants replace the 3×3 convolution within this layer with a 5×5 convolution or use a C3k2 layer. The repeated frame controls use the same multi frame processing layers but provide three copies of the current frame instead of neighboring frames.
+
+To test whether neighboring frames provide useful information, we compare the main multi frame architectures with matching controls that concatenate the current frame’s tensors three times. We also compare them with the original YOLO11n architecture. All models are trained on the same soccer data.
+
+All models start from the pretrained YOLO11n checkpoint. The backbone, neck, and detection head therefore begin with pretrained weights. The backbone and neck remain frozen throughout training, and their BatchNorm statistics remain fixed, so the feature extraction process does not change. The original YOLO11n baseline trains only its pretrained detection head. The multi frame models fine tune their pretrained detection heads and train the newly added multi frame processing layers, which are randomly initialized.
+
+#### Trial details
+
+The training data contains 750 labeled frames from six short clips across three games. The development validation data contains 1,125 labeled frames from nine clips across three different games. The footage and annotations come from the SoccerNet SN GSR 2024 dataset [@soccernetgsr2024]. Every human annotation, including players, goalkeepers, and referees, is evaluated as the single person class. Frames are resized to 640 by 384 pixels before entering the model.
+
+Each architecture is trained twice, with random seeds 42 and 43. The seed controls sources of randomness such as the new trainable weights and the order of training examples. Reporting both runs shows whether a result holds across two starting conditions, although two seeds are not enough for a formal statistical conclusion.
+
+#### Metric used
+
+I evaluate detection quality with AP50 to 95, following the average precision framework used in object detection benchmarks [@lin2014microsoft]. This metric summarizes how well the model finds people and draws accurate boxes around them. Higher values indicate better detection performance.
+
+More specifically, the evaluator compares each predicted box with the labeled boxes and measures their overlap percentage. The overlap percentage is the area shared by the two boxes divided by the total area covered by either box, expressed as a percentage. At each overlap threshold from 50 percent through 95 percent, a prediction counts as correct when its overlap with a labeled box meets or exceeds that threshold. Otherwise, it counts as incorrect.
+
+For each overlap threshold, the evaluator uses the same predictions ranked from highest to lowest confidence. It then moves through this list, adding one prediction at a time and plotting the resulting precision and recall on the precision recall curve. AP averages the model’s precision at 101 recall levels from 0.00 to 1.00. Because the curve does not usually contain a point at every exact recall level, the evaluator uses the highest precision observed at that recall level or any higher recall level. This smooths out temporary fluctuations in the curve before the precision values are averaged.
+
+AP50 to 95 repeats this process for all ten overlap thresholds and averages the resulting AP values. The metric therefore evaluates both whether people are found and how accurately their boxes are placed. It is not simply the percentage of people detected.
+
+<!-- Planned sections: data and evaluation setup; multi frame versus single frame
+comparisons; 1x1 versus 1x1 + 3x3; exploratory variants; conclusion and limits.
+Report the five frame boundary exclusions when documenting sample counts.
+Add primary source citations before publication. -->
+
+## Do neighboring frames improve detection?
+
+The following comparisons use all 1,125 validation targets. All models completed 10 training epochs. Each pair of bars shows seeds 42 and 43 separately. The lighter bar on the left represents seed 42, and the darker bar on the right represents seed 43.
+
+### Comparison with the soccer adapted YOLO baseline
+
+This first comparison asks whether the separately trained multi frame models perform better than a soccer adapted YOLO11n detector without the added multi frame processing layer. It establishes the overall performance difference, but it cannot by itself separate the value of neighboring frames from the value of the added trainable layer.
+
+The baseline uses the original YOLO11n architecture with its detection head fine tuned on the soccer data. The backbone and neck, including their BatchNorm statistics, remain frozen. The multi frame models also train the added layers that combine information from neighboring frames.
+
+```{r}
+#| label: fig-baseline-temporal
+#| fig-cap: "Detection performance of the soccer adapted YOLO baseline and the two main multi frame architectures."
+#| fig-pos: H
+#| fig-width: 11
+#| fig-height: 6.2
+make_plot(baseline_data, "Does neighboring frame information improve detection?", "Fine tuned YOLO versus multi frame models · 1,125 validation targets · 10 training epochs", c("YOLO head fine tuned", "Multi frame 1×1", "Multi frame 1×1 + 3×3"), c("YOLO\nhead fine tuned", "Multi frame\n1×1", "Multi frame\n1×1 + 3×3"))
+```
+
+```{r}
+#| output: asis
+result_table(baseline_data, c("YOLO head fine tuned", "Multi frame 1×1", "Multi frame 1×1 + 3×3"))
+```
+
+Both multi frame models score higher than the soccer adapted YOLO11n baseline. The multi frame 1×1 model has an average AP50 to 95 of 46.79 percent, compared with 43.33 percent for the baseline, a difference of 3.46 percentage points. The 1×1 followed by 3×3 model has a score of 47.13 percent, compared with 43.33 percent for the baseline, a difference of 3.80 points. These comparisons show that the separately trained multi frame models performed better than the head only fine tuned baseline. Because the multi frame models also add a trainable layer, the baseline comparison alone cannot determine whether the improvement came from the neighboring frames or from the added processing. The matched repeated frame controls provide that comparison in the next section.
+
+\clearpage
+
+### Comparison with repeated frame controls
+
+This second comparison asks whether the performance difference is due specifically to neighboring frames. It compares each multi frame model with a separately trained model that has the same added layer but receives three copies of the current frame.
+
+Each control has the same architecture as its corresponding multi frame model, but receives the current frame three times during both training and evaluation. Within each seed, the paired models share their initial weights, training data, and sample order. This comparison tests the contribution of neighboring frame information while holding the architecture fixed.
+
+```{r}
+#| label: fig-repeated-temporal
+#| fig-cap: "Multi frame models compared with matching repeated frame controls."
+#| fig-pos: H
+#| fig-width: 11
+#| fig-height: 6.2
+make_plot(repeated_data, "Does the gain come from neighboring frames?", "Matching architectures and training settings · 1,125 validation targets · 10 training epochs", c("Repeated frame 1×1", "Multi frame 1×1", "Repeated frame 1×1 + 3×3", "Multi frame 1×1 + 3×3"), c("Repeated frame\n1×1", "Multi frame\n1×1", "Repeated frame\n1×1 + 3×3", "Multi frame\n1×1 + 3×3"))
+```
+
+```{r}
+#| output: asis
+result_table(repeated_data, c("Repeated frame 1×1", "Multi frame 1×1", "Repeated frame 1×1 + 3×3", "Multi frame 1×1 + 3×3"))
+```
+
+The multi frame models also outperform their matched repeated frame controls. The 1×1 multi frame model has an average AP50 to 95 of 46.79 percent, compared with 43.08 percent for its repeated frame control, a difference of 3.71 percentage points. The 1×1 followed by 3×3 multi frame model has a score of 47.13 percent, compared with 42.77 percent for its repeated frame control, a difference of 4.36 points. These comparisons show that the separately trained multi frame models performed better than models with the same added processing that received three copies of the current frame. Because the paired models use the same trainable architecture and differ in whether they receive neighboring frames or repeated current frames, the comparison provides evidence that the neighboring frame information contributed to the higher scores.
+
+\clearpage
+
+## Does more complex multi frame processing help?
+
+The multi frame models add one multi frame processing layer after the neck and before the detection head. The following comparison changes the design of that layer and, for the five frame variants, the number of input frames.
+
+This comparison uses the same 1,116 validation targets for every architecture. Nine targets are excluded because they are too close to the start of a clip to provide two preceding frames. Scores therefore differ slightly from the previous section. The five frame variants also use 744 training targets rather than 750 because of the same boundary requirement.
+
+```{r}
+#| label: fig-temporal-architectures
+#| fig-cap: "Comparison of five multi frame architectures across two training seeds."
+#| fig-pos: H
+#| fig-width: 11
+#| fig-height: 6.2
+make_plot(architecture_data, "Does more complex multi frame processing help?", "Same 1,116 validation targets for every architecture · 10 training epochs", c("3 frames 1×1", "3 frames 1×1 + 3×3", "5 frames 1×1 + 3×3", "5 frames 1×1 + 5×5", "3 frames 1×1 + C3k2"), c("3 frames\n1×1", "3 frames\n1×1 + 3×3", "5 frames\n1×1 + 3×3", "5 frames\n1×1 + 5×5", "3 frames\n1×1 + C3k2"))
+```
+
+```{r}
+#| output: asis
+result_table(architecture_data, c("3 frames 1×1", "3 frames 1×1 + 3×3", "5 frames 1×1 + 3×3", "5 frames 1×1 + 5×5", "3 frames 1×1 + C3k2"))
+```
+
+The five frame model with 1×1 and 3×3 convolutions has the highest average AP50 to 95 score at 47.24 percent. Its lead over the three frame 1×1 followed by 3×3 model is only 0.16 percentage points, and the remaining architectures are also close. Performance also changes meaningfully between the two seeds. With only two trials, that variability makes it difficult to tell whether the small average differences reflect an architectural advantage or ordinary variation in training. More seed trials and a broader training set from additional games would be needed to identify a better temporal processing architecture. 
+
+## Conclusion
+
+This report asked two main questions. First, can information from neighboring video frames improve detection of annotated people in soccer footage? Second, if it can, does a more complicated multi frame architecture provide a further advantage?
+
+The results answer the first question positively. In these experiments, the multi frame models achieved higher average AP50 to 95 scores than both the head only fine tuned YOLO11n baseline and the matching controls that repeated the current frame. Together, the comparisons in Sections 2.1 and 2.2 indicate that the improvement came from providing neighboring frames to the model, rather than from simply adding trainable layers.
+
+The experiments did not identify an ideal multi frame processing architecture. The five frame model with 1×1 and 3×3 convolutions had the highest average score, but the differences between architectures were small and varied across seeds. More training trials and a larger, more varied set of training and validation data would be needed to select a reliable multi frame processing architecture.
+
+These findings do not indicate an error in the original YOLO11n design. YOLO11n is a general purpose detector with pretrained weights that can be fine tuned on task specific data. This project used that transfer learning setup to test whether neighboring frame information could make the detector more useful for soccer footage. Freezing the backbone and neck while training the detection head and added multi frame processing layers was a choice made for this experiment, rather than a claim about how the original model must be used. The result supports neighboring frame input as a promising direction while leaving the best implementation unresolved.
+
+## References {-}
